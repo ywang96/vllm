@@ -179,7 +179,7 @@ def sample_code_requests(
     f = open(dataset_path, "r")
     code_prompts = json.load(f)
 
-    user_prompts = random.choices(code_prompts, num_requests)
+    user_prompts = random.choices(code_prompts, k=num_requests)
     sampled_requests = []
     for i in range(num_requests):
         prompt_len = len(tokenizer(user_prompts[i]))
