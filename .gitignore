@@ -182,5 +182,3 @@ _build/
 *.hip
 *_hip*
 
-# Benchmark dataset
-*.json
