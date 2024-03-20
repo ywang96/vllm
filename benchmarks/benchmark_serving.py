@@ -186,7 +186,7 @@ def sample_code_requests(
     sampled_requests = []
     for i in range(num_requests):
         prompt_len = len(tokenizer(user_prompts[i]))
-        sampled_requests.append(user_prompts[i], prompt_len, 150)
+        sampled_requests.append((user_prompts[i], prompt_len, 150))
 
     return sampled_requests
 
