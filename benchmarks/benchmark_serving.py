@@ -182,7 +182,7 @@ def sample_code_requests(
     user_prompts = random.choices(code_prompts, k=num_requests)
     sampled_requests = []
     for i in range(num_requests):
-        prompt_len = len(tokenizer(user_prompts[i]))
+        prompt_len = len(tokenizer(user_prompts[i]).input_ids)
         sampled_requests.append((user_prompts[i], prompt_len, 150))
 
     return sampled_requests
