@@ -170,6 +170,27 @@ def sample_sonnet_requests(
     return sampled_requests
 
 
+def sample_code_requests(
+    dataset_path: str,
+    num_requests: int,
+    tokenizer: PreTrainedTokenizerBase,
+) -> List[Tuple[str, str, int, int]]:
+
+    f = open(dataset_path, "r")
+    code_prompts = json.load(f)
+
+    if num_requests > len(code_prompts):
+        raise ValueError(f"num_prompts must be less than {len(code_prompts)}.")
+
+    user_prompts = random.sample(code_prompts, num_requests)
+    sampled_requests = []
+    for i in range(num_requests):
+        prompt_len = len(tokenizer(user_prompts[i]))
+        sampled_requests.append(user_prompts[i], prompt_len, 150)
+
+    return sampled_requests
+
+
 async def get_request(
     input_requests: List[Tuple[str, int, int]],
     request_rate: float,
@@ -380,6 +401,13 @@ def main(args: argparse.Namespace):
                               for prompt, prompt_formatted, prompt_len,
                               output_len in input_requests]
 
+    elif args.dataset_name == "code":
+        input_requests = sample_code_requests(
+            dataset_path=args.dataset_path,
+            num_requests=args.num_prompts,
+            tokenizer=tokenizer,
+        )
+
     else:
         raise ValueError(f"Unknown dataset: {args.dataset_name}")
 
@@ -478,14 +506,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--endpoint",
         type=str,
-        default="/generate",
+        default="/v1/completions",
         help="API endpoint.",
     )
     parser.add_argument(
         "--dataset-name",
         type=str,
         default="sharegpt",
-        choices=["sharegpt", "sonnet"],
+        choices=["sharegpt", "sonnet", "code"],
         help="Name of the dataset to benchmark on.",
     )
     parser.add_argument("--dataset-path",
