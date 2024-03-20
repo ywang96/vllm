@@ -179,10 +179,7 @@ def sample_code_requests(
     f = open(dataset_path, "r")
     code_prompts = json.load(f)
 
-    if num_requests > len(code_prompts):
-        raise ValueError(f"num_prompts must be less than {len(code_prompts)}.")
-
-    user_prompts = random.sample(code_prompts, num_requests)
+    user_prompts = random.choices(code_prompts, num_requests)
     sampled_requests = []
     for i in range(num_requests):
         prompt_len = len(tokenizer(user_prompts[i]))
