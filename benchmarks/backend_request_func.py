@@ -224,7 +224,6 @@ async def async_request_openai_completions(
             "temperature": 0.0,
             "best_of": request_func_input.best_of,
             "max_tokens": request_func_input.output_len,
-            "stream": True,
         }
         headers = {
             "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY')}"
@@ -241,38 +240,10 @@ async def async_request_openai_completions(
             async with session.post(url=api_url, json=payload,
                                     headers=headers) as response:
                 if response.status == 200:
-                    async for chunk in response.content:
-                        chunk = chunk.strip()
-                        if not chunk:
-                            continue
-
-                        chunk = remove_prefix(chunk.decode("utf-8"), "data: ")
-                        if chunk == "[DONE]":
-                            latency = time.perf_counter() - st
-                        else:
-                            data = json.loads(chunk)
-
-                            if data["choices"][0]["text"]:
-                                timestamp = time.perf_counter()
-                                # First token
-                                if ttft == 0:
-                                    ttft = time.perf_counter() - st
-                                    output.ttft = ttft
-
-                                # Decoding phase
-                                # NOTE: Some completion API might have a last
-                                # usage summary response without a token so we
-                                # do not want to include as inter-token-latency
-                                elif data.get("usage", None) is None:
-                                    output.itl.append(timestamp -
-                                                      most_recent_timestamp)
-
-                                most_recent_timestamp = timestamp
-                                generated_text += data["choices"][0]["text"]
-
-                    output.generated_text = generated_text
+                    data = await json.loads(response)
+                    output.generated_text = data["choices"][0]["text"]
                     output.success = True
-                    output.latency = latency
+                    output.latency = time.perf_counter() - st
         except Exception:
             output.success = False
             exc_info = sys.exc_info()
