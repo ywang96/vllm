@@ -232,10 +232,8 @@ async def async_request_openai_completions(
         output = RequestFuncOutput()
         output.prompt_len = request_func_input.prompt_len
 
-        generated_text = ""
-        ttft = 0
+        output.ttft = 0
         st = time.perf_counter()
-        most_recent_timestamp = st
         try:
             async with session.post(url=api_url, json=payload,
                                     headers=headers) as response:
