@@ -238,7 +238,8 @@ async def async_request_openai_completions(
             async with session.post(url=api_url, json=payload,
                                     headers=headers) as response:
                 if response.status == 200:
-                    data = await json.loads(response)
+                    data = await response.json()
+                    print(data)
                     output.generated_text = data["choices"][0]["text"]
                     output.success = True
                     output.latency = time.perf_counter() - st
