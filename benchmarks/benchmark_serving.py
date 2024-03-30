@@ -184,6 +184,7 @@ def sample_code_requests(
         prompt_len = len(tokenizer(user_prompts[i]).input_ids)
         sampled_requests.append((user_prompts[i], prompt_len, 150))
 
+    return sampled_requests
 
 async def get_request(
     input_requests: List[Tuple[str, int, int]],
