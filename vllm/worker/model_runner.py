@@ -50,6 +50,7 @@ class PreparePromptMetadata(NamedTuple):
     lora_prompt_mapping: List[int]
     lora_requests: Set[LoRARequest]
     multi_modal_input: Optional[torch.Tensor]
+    multi_modal_size: Optional[torch.Tensor]
     slot_mapping: List[int]
 
     @classmethod
@@ -64,6 +65,7 @@ class PreparePromptMetadata(NamedTuple):
             lora_prompt_mapping=[],
             lora_requests=set(),
             multi_modal_input=None,
+            multi_modal_size=None,
             slot_mapping=[],
         )
 
@@ -232,6 +234,7 @@ class ModelRunner:
         subquery_lens: List[int] = []
         prefix_block_tables: List[List[int]] = []
         multi_modal_input_list: List[torch.Tensor] = []
+        multi_modal_size_list: List[torch.Tensor] = []
 
         if len(seq_group_metadata_list) == 0:
             return PreparePromptMetadata.empty()
@@ -305,6 +308,8 @@ class ModelRunner:
             if seq_group_metadata.multi_modal_data:
                 multi_modal_input_list.append(
                     seq_group_metadata.multi_modal_data.data)
+                multi_modal_size_list.append(
+                    seq_group_metadata.multi_modal_data.size)
 
             if seq_group_metadata.block_tables is None:
                 # During memory profiling, the block tables are not initialized
@@ -349,6 +354,8 @@ class ModelRunner:
                 "Multi-modal inputs are only supported by "
                 "vision language models.")
             multi_modal_input = torch.cat(multi_modal_input_list,
+                                          dim=0).to(self.device)
+            multi_modal_size = torch.cat(multi_modal_size_list,
                                           dim=0).to(self.device)
         else:
             multi_modal_input = None
@@ -413,6 +420,7 @@ class ModelRunner:
             lora_prompt_mapping=lora_prompt_mapping,
             lora_requests=lora_requests,
             multi_modal_input=multi_modal_input,
+            multi_modal_size=multi_modal_size,
             slot_mapping=slot_mapping,
         )
 
@@ -665,6 +673,7 @@ class ModelRunner:
                 lora_prompt_mapping,
                 lora_requests,
                 multi_modal_input,
+                multi_modal_size,
                 slot_mapping,
             ) = self._prepare_prompt(prefill_reqs)
             (
@@ -733,6 +742,7 @@ class ModelRunner:
                 "lora_requests": lora_requests,
                 "lora_mapping": lora_mapping,
                 "multi_modal_input": multi_modal_input,
+                "multi_modal_size": multi_modal_size,
                 "num_prefill_tokens": num_prefill_tokens,
                 "num_decode_tokens": num_decode_tokens,
                 "slot_mapping": slot_mapping,
@@ -763,6 +773,7 @@ class ModelRunner:
             lora_mapping = metadata_dict.pop("lora_mapping")
             lora_requests = metadata_dict.pop("lora_requests")
             multi_modal_input = metadata_dict.pop("multi_modal_input")
+            multi_modal_size = metadata_dict.pop("multi_modal_size")
             num_prefill_tokens = metadata_dict.pop("num_prefill_tokens")
             num_decode_tokens = metadata_dict.pop("num_decode_tokens")
             batch_type = metadata_dict.pop("batch_type")
@@ -805,7 +816,7 @@ class ModelRunner:
 
         return (input_tokens, input_positions, attn_metadata,
                 sampling_metadata, lora_requests, lora_mapping,
-                multi_modal_input)
+                multi_modal_input, multi_modal_size)
 
     @torch.inference_mode()
     def execute_model(
@@ -814,7 +825,7 @@ class ModelRunner:
         kv_caches: List[torch.Tensor],
     ) -> Optional[SamplerOutput]:
         (input_tokens, input_positions, attn_metadata, sampling_metadata,
-         lora_requests, lora_mapping, multi_modal_input
+         lora_requests, lora_mapping, multi_modal_input, multi_modal_size,
          ) = self.prepare_input_tensors(seq_group_metadata_list)
 
         if self.lora_config:
@@ -835,7 +846,7 @@ class ModelRunner:
             "attn_metadata": attn_metadata,
         }
         if self.vision_language_config:
-            execute_model_kwargs.update({"image_input": multi_modal_input})
+            execute_model_kwargs.update({"image_input": multi_modal_input, "image_size": multi_modal_size})
         hidden_states = model_executable(**execute_model_kwargs)
 
         # Compute the logits.
@@ -1186,7 +1197,8 @@ def _prepare_fake_inputs(
         fake_image_input = MultiModalData(
             type=MultiModalData.Type.IMAGE,
             data=torch.zeros(vision_language_config.image_input_shape,
-                             dtype=torch.float16))
+                             dtype=torch.float16),
+            size=torch.tensor([[1024, 1024]]))
     else:
         prompt_tokens = [0] * seq_len
         fake_image_input = None

@@ -8,6 +8,7 @@ from torch import nn
 from vllm.config import DeviceConfig, ModelConfig
 from vllm.model_executor.models import ModelRegistry
 from vllm.model_executor.models.llava import LlavaForConditionalGeneration
+from vllm.model_executor.models.llava_next import LlavaNextForConditionalGeneration
 from vllm.model_executor.tensorizer_loader import (
     ParameterizedLoadFormat, is_vllm_serialized_tensorizer,
     load_with_tensorizer)
@@ -16,6 +17,7 @@ from vllm.model_executor.weight_utils import (get_quant_config,
 
 _VISION_MODEL_CLASSES = [
     LlavaForConditionalGeneration,
+    LlavaNextForConditionalGeneration,
 ]
 
 

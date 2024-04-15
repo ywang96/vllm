@@ -387,9 +387,10 @@ class MultiModalData:
     class Type(enum.Enum):
         IMAGE = enum.auto()
 
-    def __init__(self, type: Type, data: "torch.Tensor"):
+    def __init__(self, type: Type, data: "torch.Tensor", size: "torch.Tensor"):
         self.type = type
         self.data = data
+        self.size = size
 
 
 class SequenceGroup:
