@@ -166,9 +166,12 @@ def _merge_vision_embeddings(input_ids: torch.Tensor,
                              vision_embeddings: torch.Tensor,
                              image_token_id: int):
     """In place merges in vision_embeddings with inputs_embeds."""
+
+
     mask = (input_ids == image_token_id)
     inputs_embeds[mask] = vision_embeddings.view(-1,
                                                  vision_embeddings.shape[-1])
+
 
 class LlavaNextForConditionalGeneration(nn.Module):
 
@@ -178,7 +181,7 @@ class LlavaNextForConditionalGeneration(nn.Module):
                  linear_method: Optional["LinearMethodBase"] = None) -> None:
         super().__init__()
         self.config = config
-
+        self.image_newline = nn.Parameter(torch.empty(config.text_config.hidden_size, dtype=self.config.text_config.torch_dtype))
         self.vision_language_config = vision_language_config
 
         assert self.vision_language_config, (
@@ -216,18 +219,11 @@ class LlavaNextForConditionalGeneration(nn.Module):
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
         image_input: Optional[torch.Tensor] = None,
-        image_sizes: Optional[torch.Tensor] = None,
+        image_size: Optional[torch.Tensor] = None,
     ) -> SamplerOutput:
-
-        vision_feature_select_strategy = (
-            vision_feature_select_strategy
-            if vision_feature_select_strategy is not None
-            else self.config.vision_feature_select_strategy
-        )
 
         # 1. Extract the input embeddings
         inputs_embeds = self.language_model.get_input_embeddings(input_ids)
-
         if image_input is not None:
             if self.vision_tower is not None:
                 batch_size, num_patches, num_channels, height, width = image_input.shape
@@ -235,10 +231,10 @@ class LlavaNextForConditionalGeneration(nn.Module):
                 image_outputs = self.vision_tower(reshaped_pixel_values, output_hidden_states=True)
                 image_features = image_outputs.hidden_states[self.config.vision_feature_layer]
 
-                if vision_feature_select_strategy == "default":
+                if self.config.vision_feature_select_strategy == "default":
                     image_features = image_features[:, 1:]
-                elif vision_feature_select_strategy == "full":
-                    image_features = image_features 
+                elif self.config.vision_feature_select_strategy == "full":
+                    image_features = image_features
                 else:
                     raise ValueError(
                         f"Unexpected select feature strategy: "
@@ -264,14 +260,14 @@ class LlavaNextForConditionalGeneration(nn.Module):
                         if height * width != base_image_feature.shape[0]:
                             raise ValueError("The number of patches is not consistent with the image size.")
                         num_patch_height, num_patch_width = get_anyres_image_grid_shape(
-                            image_sizes[image_idx],
+                            image_size[image_idx],
                             self.config.image_grid_pinpoints,
                             self.config.vision_config.image_size,
                         )
                         image_feature = image_feature.view(num_patch_height, num_patch_width, height, width, -1)
                         image_feature = image_feature.permute(4, 0, 2, 1, 3).contiguous()
                         image_feature = image_feature.flatten(1, 2).flatten(2, 3)
-                        image_feature = unpad_image(image_feature, image_sizes[image_idx])
+                        image_feature = unpad_image(image_feature, image_size[image_idx])
                         image_feature = torch.cat(
                             (
                                 image_feature,
@@ -301,61 +297,63 @@ class LlavaNextForConditionalGeneration(nn.Module):
 
         return hidden_states
 
-def compute_logits(self, hidden_states: torch.Tensor,
-                    sampling_metadata: SamplingMetadata) -> torch.Tensor:
-    logits = self.logits_processor(self.lm_head.weight, hidden_states,
-                                    sampling_metadata)
-    return logits
+    def compute_logits(self, hidden_states: torch.Tensor,
+                        sampling_metadata: SamplingMetadata) -> torch.Tensor:
+        logits = self.logits_processor(self.lm_head.weight, hidden_states,
+                                        sampling_metadata)
+        return logits
 
-def sample(
-    self,
-    logits: torch.Tensor,
-    sampling_metadata: SamplingMetadata,
-) -> Optional[SamplerOutput]:
-    next_tokens = self.sampler(logits, sampling_metadata)
-    return next_tokens
+    def sample(
+        self,
+        logits: torch.Tensor,
+        sampling_metadata: SamplingMetadata,
+    ) -> Optional[SamplerOutput]:
+        next_tokens = self.sampler(logits, sampling_metadata)
+        return next_tokens
 
-def load_weights(self,
-                    model_name_or_path: str,
-                    cache_dir: Optional[str] = None,
-                    load_format: str = "auto",
-                    revision: Optional[str] = None):
-    # only doing this for language model part for now.
-    stacked_params_mapping = [
-        # (param_name, shard_name, shard_id)
-        ("qkv_proj", "q_proj", "q"),
-        ("qkv_proj", "k_proj", "k"),
-        ("qkv_proj", "v_proj", "v"),
-        ("gate_up_proj", "gate_proj", 0),
-        ("gate_up_proj", "up_proj", 1),
-    ]
-    params_dict = dict(self.named_parameters())
-    for name, loaded_weight in hf_model_weights_iterator(
-            model_name_or_path, cache_dir, load_format, revision):
-        if "rotary_emb.inv_freq" in name:
-            continue
-        for key_to_modify, new_key in _KEYS_TO_MODIFY_MAPPING.items():
-            if key_to_modify in name:
-                name = name.replace(key_to_modify, new_key)
-        use_default_weight_loading = False
-        if "vision" in name:
-            if self.vision_tower is not None:
-                # We only do sharding for language model and
-                # not vision model for now.
-                use_default_weight_loading = True
-        else:
-            for (param_name, weight_name,
-                    shard_id) in stacked_params_mapping:
-                if weight_name not in name:
-                    continue
-                param = params_dict[name.replace(weight_name, param_name)]
-                weight_loader = param.weight_loader
-                weight_loader(param, loaded_weight, shard_id)
-                break
+    def load_weights(self,
+                        model_name_or_path: str,
+                        cache_dir: Optional[str] = None,
+                        load_format: str = "auto",
+                        revision: Optional[str] = None):
+        # only doing this for language model part for now.
+        stacked_params_mapping = [
+            # (param_name, shard_name, shard_id)
+            ("qkv_proj", "q_proj", "q"),
+            ("qkv_proj", "k_proj", "k"),
+            ("qkv_proj", "v_proj", "v"),
+            ("gate_up_proj", "gate_proj", 0),
+            ("gate_up_proj", "up_proj", 1),
+        ]
+        params_dict = dict(self.named_parameters())
+        for name, loaded_weight in hf_model_weights_iterator(
+                model_name_or_path, cache_dir, load_format, revision):
+            if "rotary_emb.inv_freq" in name:
+                continue
+            if "image_newline" in name:
+                continue
+            for key_to_modify, new_key in _KEYS_TO_MODIFY_MAPPING.items():
+                if key_to_modify in name:
+                    name = name.replace(key_to_modify, new_key)
+            use_default_weight_loading = False
+            if "vision" in name:
+                if self.vision_tower is not None:
+                    # We only do sharding for language model and
+                    # not vision model for now.
+                    use_default_weight_loading = True
             else:
-                use_default_weight_loading = True
-        if use_default_weight_loading:
-            param = params_dict[name]
-            weight_loader = getattr(param, "weight_loader",
-                                    default_weight_loader)
-            weight_loader(param, loaded_weight)
+                for (param_name, weight_name,
+                        shard_id) in stacked_params_mapping:
+                    if weight_name not in name:
+                        continue
+                    param = params_dict[name.replace(weight_name, param_name)]
+                    weight_loader = param.weight_loader
+                    weight_loader(param, loaded_weight, shard_id)
+                    break
+                else:
+                    use_default_weight_loading = True
+            if use_default_weight_loading:
+                param = params_dict[name]
+                weight_loader = getattr(param, "weight_loader",
+                                        default_weight_loader)
+                weight_loader(param, loaded_weight)

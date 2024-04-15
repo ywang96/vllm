@@ -52,6 +52,7 @@ def _merge_vision_embeddings(input_ids: torch.Tensor,
                              vision_embeddings: torch.Tensor,
                              image_token_id: int):
     """In place merges in vision_embeddings with inputs_embeds."""
+
     mask = (input_ids == image_token_id)
     inputs_embeds[mask] = vision_embeddings.view(-1,
                                                  vision_embeddings.shape[-1])
@@ -102,7 +103,8 @@ class LlavaForConditionalGeneration(nn.Module):
         positions: torch.Tensor,
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
-        image_input: Optional[torch.Tensor] = None
+        image_input: Optional[torch.Tensor] = None,
+        **kwargs,
     ) -> SamplerOutput:  # noqa: E501
         """Run forward pass for Llava 1.5.
 
