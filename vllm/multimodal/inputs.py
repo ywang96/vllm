@@ -250,6 +250,20 @@ class MultiModalFieldElem:
                 and type(self.field) == type(other.field))  # noqa: E721
 
 
+class MultiModalFeatureSpec:
+    """
+    Encapsulates multimodal related inputs and metadata required by the EngineCore. 
+
+    MultiModalFeatureSpec corresponds to individual mm data items (e,g one image). For instance, a request with 
+    5 images will return a list of 5 MultiModalFeatureSpec's.
+    """
+
+    data: Optional[dict[str, Union[torch.Tensor, Sequence[torch.Tensor]]]] 
+    modality: str 
+    mm_identifier: str 
+    mm_position: PlaceholderRange 
+
+
 @dataclass(frozen=True)
 class BaseMultiModalField(ABC):
     """
