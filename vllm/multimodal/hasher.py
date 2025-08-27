@@ -59,11 +59,12 @@ class MultiModalHasher:
         if isinstance(obj, np.ndarray):
             # If the array is non-contiguous, we need to copy it first
             arr_data = obj.data if obj.flags.c_contiguous else obj.tobytes()
-            return cls.item_to_bytes("ndarray", {
-                "dtype": obj.dtype.str,
-                "shape": obj.shape,
-                "data": arr_data,
-            })
+            return cls.item_to_bytes(
+                "ndarray", {
+                    "dtype": obj.dtype.str,
+                    "shape": obj.shape,
+                    "data": str(arr_data),
+                })
 
         logger.warning(
             "No serialization method found for %s. "
