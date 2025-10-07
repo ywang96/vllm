@@ -589,11 +589,8 @@ class Gemma3nForConditionalGeneration(
         self,
         image_input: Gemma3nImageInputs,
     ) -> list[torch.Tensor]:
-        if self.vision_tower is None or self.embed_vision is None:
-            raise RuntimeError(
-                "Vision tower is disabled. Set "
-                "--limit-mm-per-prompt.image > 0 to enable image inputs."
-            )
+        assert self.vision_tower is not None
+        assert self.embed_vision is not None
 
         pixel_values = image_input["pixel_values"]
         vision_outputs = self.vision_tower(
