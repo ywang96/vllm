@@ -503,11 +503,17 @@ class Gemma3nForConditionalGeneration(
         self.multimodal_config = multimodal_config
         self.vocab_size = config.text_config.vocab_size
 
-        self.vision_tower = AutoModel.from_config(config=config.vision_config)
+        image_limit = multimodal_config.get_limit_per_prompt("image")
+        if image_limit:
+            self.vision_tower = AutoModel.from_config(config=config.vision_config)
+            self.embed_vision = Gemma3nMultimodalEmbedder(
+                config.vision_config, config.text_config
+            )
+        else:
+            self.vision_tower = None
+            self.embed_vision = None
+
         self.audio_tower = AutoModel.from_config(config=config.audio_config)
-        self.embed_vision = Gemma3nMultimodalEmbedder(
-            config.vision_config, config.text_config
-        )
         self.embed_audio = Gemma3nMultimodalEmbedder(
             config.audio_config, config.text_config
         )
@@ -583,7 +589,11 @@ class Gemma3nForConditionalGeneration(
         self,
         image_input: Gemma3nImageInputs,
     ) -> list[torch.Tensor]:
-        assert self.vision_tower is not None
+        if self.vision_tower is None or self.embed_vision is None:
+            raise RuntimeError(
+                "Vision tower is disabled. Set "
+                "--limit-mm-per-prompt.image > 0 to enable image inputs."
+            )
 
         pixel_values = image_input["pixel_values"]
         vision_outputs = self.vision_tower(
@@ -735,7 +745,13 @@ class Gemma3nForConditionalGeneration(
         return self.language_model.compute_logits(hidden_states)
 
     def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:
-        loader = AutoWeightsLoader(self)
+        skip_prefixes = []
+        if self.vision_tower is None:
+            skip_prefixes.append("vision_tower.")
+        if self.embed_vision is None:
+            skip_prefixes.append("embed_vision.")
+
+        loader = AutoWeightsLoader(self, skip_prefixes=skip_prefixes)
         return loader.load_weights(weights, mapper=self.hf_to_vllm_mapper)
 
     def get_mm_mapping(self) -> MultiModelKeys:
