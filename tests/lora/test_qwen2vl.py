@@ -144,7 +144,7 @@ QWEN25VL_MODEL_PATH = "Qwen/Qwen2.5-VL-3B-Instruct"
 
 @pytest.mark.xfail(
     current_platform.is_rocm(),
-    reason="Qwen2-VL dependency xformers incompatible with ROCm",
+    reason="Qwen2-VL dependencies incompatible with ROCm",
 )
 def test_qwen2vl_lora(qwen2vl_lora_files):
     """Test Qwen 2.0 VL model with LoRA"""
@@ -158,7 +158,7 @@ def test_qwen2vl_lora(qwen2vl_lora_files):
 
 @pytest.mark.xfail(
     current_platform.is_rocm(),
-    reason="Qwen2-VL dependency xformers incompatible with ROCm",
+    reason="Qwen2-VL dependencies incompatible with ROCm",
 )
 def test_qwen2vl_lora_beam_search(qwen2vl_lora_files):
     """Test Qwen 2.0 VL model with LoRA through beam search."""
@@ -180,7 +180,7 @@ def test_qwen2vl_lora_beam_search(qwen2vl_lora_files):
 
 @pytest.mark.xfail(
     current_platform.is_rocm(),
-    reason="Qwen2.5-VL dependency xformers incompatible with ROCm",
+    reason="Qwen2.5-VL dependencies incompatible with ROCm",
 )
 def test_qwen25vl_lora(qwen25vl_lora_files):
     """Test Qwen 2.5 VL model with LoRA"""

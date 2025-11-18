@@ -198,7 +198,7 @@ def test_disable_sliding_window(model_id_expected):
 
 
 @pytest.mark.skipif(
-    current_platform.is_rocm(), reason="Xformers backend is not supported on ROCm."
+    current_platform.is_rocm(), reason="Embedding pooling config not supported on ROCm."
 )
 def test_get_pooling_config():
     model_id = "sentence-transformers/all-MiniLM-L12-v2"
@@ -210,7 +210,7 @@ def test_get_pooling_config():
 
 
 @pytest.mark.skipif(
-    current_platform.is_rocm(), reason="Xformers backend is not supported on ROCm."
+    current_platform.is_rocm(), reason="Embedding pooling config not supported on ROCm."
 )
 def test_get_pooling_config_from_args():
     model_id = "sentence-transformers/all-MiniLM-L12-v2"
@@ -236,7 +236,7 @@ def test_default_pooling_type(model_id, default_pooling_type, pooling_type):
 
 
 @pytest.mark.skipif(
-    current_platform.is_rocm(), reason="Xformers backend is not supported on ROCm."
+    current_platform.is_rocm(), reason="Embedding pooling config not supported on ROCm."
 )
 def test_get_bert_tokenization_sentence_transformer_config():
     model_id = "BAAI/bge-base-en-v1.5"

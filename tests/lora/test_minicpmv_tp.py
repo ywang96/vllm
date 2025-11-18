@@ -59,7 +59,7 @@ def do_sample(llm: vllm.LLM, lora_path: str, lora_id: int) -> list[str]:
 
 @pytest.mark.xfail(
     current_platform.is_rocm(),
-    reason="MiniCPM-V dependency xformers incompatible with ROCm",
+    reason="MiniCPM-V dependencies incompatible with ROCm",
 )
 def test_minicpmv_lora(minicpmv_lora_files):
     llm = vllm.LLM(
@@ -86,7 +86,7 @@ def test_minicpmv_lora(minicpmv_lora_files):
 )
 @pytest.mark.xfail(
     current_platform.is_rocm(),
-    reason="MiniCPM-V dependency xformers incompatible with ROCm",
+    reason="MiniCPM-V dependencies incompatible with ROCm",
 )
 @multi_gpu_test(num_gpus=4)
 def test_minicpmv_tp4_wo_fully_sharded_loras(minicpmv_lora_files):
@@ -110,7 +110,7 @@ def test_minicpmv_tp4_wo_fully_sharded_loras(minicpmv_lora_files):
 )
 @pytest.mark.xfail(
     current_platform.is_rocm(),
-    reason="MiniCPM-V dependency xformers incompatible with ROCm",
+    reason="MiniCPM-V dependencies incompatible with ROCm",
 )
 @multi_gpu_test(num_gpus=4)
 def test_minicpmv_tp4_fully_sharded_loras(minicpmv_lora_files):
