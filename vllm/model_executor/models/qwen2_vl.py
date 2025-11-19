@@ -347,7 +347,6 @@ class Qwen2VisionAttention(nn.Module):
         if self.attn_backend not in {
             AttentionBackendEnum.FLASH_ATTN,
             AttentionBackendEnum.TORCH_SDPA,
-            AttentionBackendEnum.XFORMERS,
             AttentionBackendEnum.ROCM_AITER_FA,
         }:
             raise RuntimeError(
@@ -382,8 +381,7 @@ class Qwen2VisionAttention(nn.Module):
         cu_seqlens: torch.Tensor,
         rotary_pos_emb_cos: torch.Tensor,
         rotary_pos_emb_sin: torch.Tensor,
-        max_seqlen: int | None = None,  # Only used for Flash Attention
-        seqlens: list[int] | None = None,  # Only used for xFormers
+        max_seqlen: int | None = None,
     ) -> torch.Tensor:
         # [s, b, c] --> [s, b, 3 * head * head_dim]
         x, _ = self.qkv(x)
@@ -444,21 +442,6 @@ class Qwen2VisionAttention(nn.Module):
             context_layer = rearrange(
                 context_layer, "b s h d -> s b (h d)"
             ).contiguous()
-        elif self.attn_backend == AttentionBackendEnum.XFORMERS:
-            from xformers import ops as xops
-            from xformers.ops.fmha.attn_bias import BlockDiagonalMask
-
-            attn_bias = BlockDiagonalMask.from_seqlens(
-                q_seqlen=seqlens, kv_seqlen=None, device=q.device
-            )
-
-            context_layer = xops.memory_efficient_attention_forward(
-                q, k, v, attn_bias=attn_bias, p=0, scale=None
-            )
-            context_layer = rearrange(
-                context_layer, "b s h d -> s b (h d)"
-            ).contiguous()
-
         output, _ = self.proj(context_layer)
         return output
 
@@ -507,8 +490,7 @@ class Qwen2VisionBlock(nn.Module):
         cu_seqlens: torch.Tensor,
         rotary_pos_emb_cos: torch.Tensor,
         rotary_pos_emb_sin: torch.Tensor,
-        max_seqlen: int | None = None,  # Only used for Flash Attention
-        seqlens: list[int] | None = None,  # Only used for xFormers
+        max_seqlen: int | None = None,
     ) -> torch.Tensor:
         x = x + self.attn(
             self.norm1(x),
@@ -516,7 +498,6 @@ class Qwen2VisionBlock(nn.Module):
             rotary_pos_emb_cos=rotary_pos_emb_cos,
             rotary_pos_emb_sin=rotary_pos_emb_sin,
             max_seqlen=max_seqlen,
-            seqlens=seqlens,
         )
 
         x = x + self.mlp(self.norm2(x))
@@ -733,18 +714,13 @@ class Qwen2VisionTransformer(nn.Module):
         sin_combined = torch.cat([sin_h, sin_w], dim=-1)
         return cos_combined, sin_combined
 
-    def compute_attn_mask_seqlen(
-        self, cu_seqlens: torch.Tensor
-    ) -> tuple[int | None, list[int] | None]:
-        max_seqlen, seqlens = None, None
+    def compute_attn_mask_seqlen(self, cu_seqlens: torch.Tensor) -> int | None:
         if self.attn_backend in {
             AttentionBackendEnum.FLASH_ATTN,
             AttentionBackendEnum.ROCM_AITER_FA,
         }:
-            max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
-        elif self.attn_backend == AttentionBackendEnum.XFORMERS:
-            seqlens = (cu_seqlens[1:] - cu_seqlens[:-1]).tolist()
-        return max_seqlen, seqlens
+            return (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
+        return None
 
     def forward(
         self,
@@ -774,8 +750,8 @@ class Qwen2VisionTransformer(nn.Module):
         # transformers
         x = x.unsqueeze(1)
 
-        # pre-compute seqlens for attn mask to reduce cuMemcpy operations
-        max_seqlen, seqlens = self.compute_attn_mask_seqlen(cu_seqlens)
+        # Pre-compute max sequence length for flash attention.
+        max_seqlen = self.compute_attn_mask_seqlen(cu_seqlens)
         for blk in self.blocks:
             x = blk(
                 x,
@@ -783,7 +759,6 @@ class Qwen2VisionTransformer(nn.Module):
                 rotary_pos_emb_cos=rotary_pos_emb_cos,
                 rotary_pos_emb_sin=rotary_pos_emb_sin,
                 max_seqlen=max_seqlen,
-                seqlens=seqlens,
             )
 
         # adapter

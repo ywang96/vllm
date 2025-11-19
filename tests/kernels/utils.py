@@ -509,123 +509,6 @@ def pack_qkv(qkv: QKVInputs, device: torch.device | str) -> PackedQKVInputs:
     )
 
 
-def make_alibi_bias(
-    alibi_slopes: torch.Tensor,
-    num_kv_heads: int,
-    dtype: torch.dtype,
-    seq_lens: list[int],
-) -> list[Any]:
-    """Create ALiBi biases compatible with xFormers attention tests."""
-    from xformers.ops.fmha.attn_bias import LowerTriangularMaskWithTensorBias
-
-    if alibi_slopes is None:
-        return [None for _ in seq_lens]
-
-    attn_biases: list[Any] = []
-    num_heads = alibi_slopes.shape[0]
-    assert num_heads >= num_kv_heads, (
-        "ALiBi slopes expect at least as many heads as KV heads"
-    )
-
-    for seq_len in seq_lens:
-        bias = torch.arange(seq_len, dtype=dtype, device=alibi_slopes.device)
-        bias = bias[None, :] - bias[:, None]
-
-        padded_len = (seq_len + 7) // 8 * 8
-        bias_tensor = torch.empty(
-            1,
-            num_heads,
-            seq_len,
-            padded_len,
-            device=alibi_slopes.device,
-            dtype=dtype,
-        )[:, :, :, :seq_len].copy_(bias)
-        bias_tensor.mul_(alibi_slopes[:, None, None])
-        attn_biases.append(LowerTriangularMaskWithTensorBias(bias_tensor))
-
-    return attn_biases
-
-
-def _make_metadata_tensors(
-    seq_lens: list[int] | None,
-    context_lens: list[int] | None,
-    encoder_seq_lens: list[int] | None,
-    device: torch.device | str,
-) -> tuple[
-    torch.Tensor,
-    torch.Tensor,
-    Any,
-    Any,
-    torch.Tensor | None,
-    torch.Tensor,
-    torch.Tensor,
-    int | None,
-]:
-    """
-    Build scalar & tensor values required to build attention metadata structure.
-
-    Arguments:
-
-    * seq_lens: list of token-counts for each decoder input seq
-    * context_lens: list of context length values for each seq
-    * encoder_seq_lens: list of token-counts for each encoder input seq
-    * device: CPU or CUDA device
-
-    Returns:
-
-    * seq_lens_tensor: decoder seq_lens list, as tensor
-    * context_lens_tensor: context_lens list, as tensor
-    * max_context_len: max(context_lens)
-    * max_seq_len: max(seq_lens)
-    * seq_start_loc: start idx of each sequence
-    * encoder_seq_lens_tensor: encoder seq_lens list, as tensor
-    * encoder_seq_start_loc: start idx of each encoder sequence
-    * max_encoder_seq_len: encoder seq_lens list, as tensor
-    """
-    seq_lens_tensor = maybe_make_int_tensor(seq_lens, device)
-    context_lens_tensor = maybe_make_int_tensor(context_lens, device)
-    max_context_len = maybe_max(context_lens)
-    max_seq_len = maybe_max(seq_lens)
-
-    encoder_seq_lens_tensor = maybe_make_int_tensor(encoder_seq_lens, device)
-    max_encoder_seq_len = None if encoder_seq_lens is None else max(encoder_seq_lens)
-
-    seq_start_loc = None
-
-    if seq_lens_tensor is not None:
-        seq_start_loc = torch.zeros(
-            seq_lens_tensor.shape[0] + 1,
-            dtype=torch.int32,
-            device=seq_lens_tensor.device,
-        )
-        torch.cumsum(
-            seq_lens_tensor, dim=0, dtype=seq_start_loc.dtype, out=seq_start_loc[1:]
-        )
-
-    encoder_seq_start_loc = torch.zeros(
-        encoder_seq_lens_tensor.shape[0] + 1,
-        dtype=torch.int32,
-        device=encoder_seq_lens_tensor.device,
-    )
-    torch.cumsum(
-        encoder_seq_lens_tensor,
-        dim=0,
-        dtype=encoder_seq_start_loc.dtype,
-        out=encoder_seq_start_loc[1:],
-    )
-
-    return (
-        seq_lens_tensor,
-        context_lens_tensor,
-        max_context_len,
-        max_seq_len,
-        seq_start_loc,
-        encoder_seq_lens_tensor,
-        encoder_seq_start_loc,
-        max_encoder_seq_len,
-    )
-
-
 def make_kv_cache(
     num_blocks: int,
     num_heads: int,
@@ -649,23 +532,15 @@ def make_kv_cache(
 
     Returns:
 
-    * kv_cache: 2 x num_blocks x (block_size * num_heads * head_size)
-    *     for backend 'XFORMERS'
     * kv_cache: 2 x num_blocks x block_size x num_heads x head_size
     *     for backend 'FLASH_ATTN'
     """
-    if backend == "XFORMERS":
-        kv_cache = torch.rand((2, num_blocks, block_size * num_heads * head_size)).to(
-            device
-        )
-    elif backend == "FLASH_ATTN":
+    if backend == "FLASH_ATTN":
         kv_cache = torch.rand((2, num_blocks, block_size, num_heads, head_size)).to(
             device
         )
     else:
-        raise ValueError(
-            f"Unknown backend value: '{backend}'. Expected 'XFORMERS' or 'FLASH_ATTN'."
-        )
+        raise ValueError(f"Unknown backend value: '{backend}'. Expected 'FLASH_ATTN'.")
     if default_val is not None:
         kv_cache[:, :, :] = default_val
     return kv_cache
@@ -843,12 +718,7 @@ def assert_actual_matches_ideal(
     * output_under_test: actually observed output value
     """
     ideal_output = test_params.packed_qkvo.ideal_output
-    if backend == "XFORMERS":
-        torch.testing.assert_close(
-            ideal_output, output_under_test.view_as(ideal_output)
-        )
-
-    elif backend == "FLASH_ATTN":
+    if backend == "FLASH_ATTN":
         # For FlashAttention override the accuracy thresholds to non default
         # values since we notice a higher difference between the ideal and
         # actual output.
@@ -856,9 +726,7 @@ def assert_actual_matches_ideal(
             ideal_output, output_under_test.view_as(ideal_output), atol=0.01, rtol=0.016
         )
     else:
-        raise ValueError(
-            f"Unknown backend value: '{backend}'. Expected 'XFORMERS' or 'FLASH_ATTN'."
-        )
+        raise ValueError(f"Unknown backend value: '{backend}'. Expected 'FLASH_ATTN'.")
 
 
 # Copied/modified from torch._refs.__init__.py

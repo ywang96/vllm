@@ -76,6 +76,7 @@ from .vision import (
 try:
     from xformers import ops as xops
 
+    # vLLM does not install xformers by default.
     if current_platform.is_cuda() and current_platform.has_device_capability(100):
         # Xformers FA is not compatible with B200
         USE_XFORMERS_OPS = False
