@@ -1552,16 +1552,17 @@ class Glm4vForConditionalGeneration(
         assert grid_thw.ndim == 2
         grid_thw_list = grid_thw.tolist()
 
+        if image_input["type"] == "pixel_values" and self.use_data_parallel:
+            pixel_values = image_input["pixel_values"].type(self.visual.dtype)
+            return run_dp_sharded_mrope_vision_model(
+                self.visual, pixel_values, grid_thw_list, rope_type="rope_3d"
+            )
+
         if image_input["type"] == "image_embeds":
             image_embeds = image_input["image_embeds"].type(self.visual.dtype)
         else:
             pixel_values = image_input["pixel_values"].type(self.visual.dtype)
-            if self.use_data_parallel:
-                return run_dp_sharded_mrope_vision_model(
-                    self.visual, pixel_values, grid_thw.tolist(), rope_type="rope_3d"
-                )
-            else:
-                image_embeds = self.visual(pixel_values, grid_thw=grid_thw.tolist())
+            image_embeds = self.visual(pixel_values, grid_thw=grid_thw_list)
         merge_size = self.visual.spatial_merge_size
         sizes = (
             torch.tensor(grid_thw_list, dtype=torch.long).prod(-1)
@@ -1576,23 +1577,24 @@ class Glm4vForConditionalGeneration(
         assert grid_thw.ndim == 2
         grid_thw_list = grid_thw.tolist()
 
+        if video_input["type"] == "pixel_values_videos" and self.use_data_parallel:
+            pixel_values_videos = video_input["pixel_values_videos"].type(
+                self.visual.dtype
+            )
+            return run_dp_sharded_mrope_vision_model(
+                self.visual,
+                pixel_values_videos,
+                grid_thw_list,
+                rope_type="rope_3d",
+            )
+
         if video_input["type"] == "video_embeds":
             video_embeds = video_input["video_embeds"].type(self.visual.dtype)
         else:
             pixel_values_videos = video_input["pixel_values_videos"].type(
                 self.visual.dtype
             )
-            if self.use_data_parallel:
-                return run_dp_sharded_mrope_vision_model(
-                    self.visual,
-                    pixel_values_videos,
-                    grid_thw.tolist(),
-                    rope_type="rope_3d",
-                )
-            else:
-                video_embeds = self.visual(
-                    pixel_values_videos, grid_thw=grid_thw.tolist()
-                )
+            video_embeds = self.visual(pixel_values_videos, grid_thw=grid_thw_list)
         # Split concatenated embeddings for each video item.
         merge_size = self.visual.spatial_merge_size
         sizes = (
