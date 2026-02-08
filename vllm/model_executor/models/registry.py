@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import torch.nn as nn
-import transformers
 
+import transformers
 from vllm import envs
 from vllm.config import (
     ModelConfig,
@@ -464,6 +464,10 @@ _MULTIMODAL_MODELS = {
     "Qwen3VLMoeForConditionalGeneration": (
         "qwen3_vl_moe",
         "Qwen3VLMoeForConditionalGeneration",
+    ),
+    "Qwen3_5MoeForConditionalGeneration": (
+        "qwen3_5_moe",
+        "Qwen3_5MoeForConditionalGeneration",
     ),
     "SkyworkR1VChatModel": ("skyworkr1v", "SkyworkR1VChatModel"),
     "Step3VLForConditionalGeneration": ("step3_vl", "Step3VLForConditionalGeneration"),  # noqa: E501
